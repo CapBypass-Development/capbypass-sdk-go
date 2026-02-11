@@ -63,3 +63,15 @@ type GetBalanceResponse struct {
 	ErrorDescription string  `json:"errorDescription,omitempty"`
 	Balance          float64 `json:"balance,omitempty"`
 }
+
+// PricingItem represents pricing for a single task type.
+type PricingItem struct {
+	TaskType string  `json:"task_type"`
+	UserCost float64 `json:"user_cost"`
+	Status   string  `json:"status"`
+}
+
+// PricingResponse represents the response from GET /pricing.
+type PricingResponse struct {
+	Pricing []PricingItem `json:"pricing"`
+}

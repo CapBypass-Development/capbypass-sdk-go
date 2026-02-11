@@ -111,6 +111,59 @@ func (c *Client) makeRequest(endpoint string, payload interface{}, maxRetries in
 	return nil, lastErr
 }
 
+// makeGetRequest makes an HTTP GET request with retry logic.
+func (c *Client) makeGetRequest(endpoint string, maxRetries int) ([]byte, error) {
+	url := c.baseURL + endpoint
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, &ErrNetwork{Message: "Failed to create request", Err: err}
+		}
+
+		req.Header.Set("User-Agent", userAgent)
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			lastErr = &ErrNetwork{Message: "Connection failed", Err: err}
+			if attempt < maxRetries {
+				backoff := time.Duration(math.Min(10, math.Pow(2, float64(attempt)))+rand.Float64()) * time.Second
+				time.Sleep(backoff)
+				continue
+			}
+			return nil, lastErr
+		}
+
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, &ErrParse{Message: "Failed to read response", Err: err}
+		}
+
+		if resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504 {
+			if attempt < maxRetries {
+				backoff := time.Duration(math.Min(10, math.Pow(2, float64(attempt)))+rand.Float64()) * time.Second
+				time.Sleep(backoff)
+				continue
+			}
+			return nil, &ErrGateway{StatusCode: resp.StatusCode, Message: string(body)}
+		}
+
+		if resp.StatusCode == 500 {
+			return nil, &ErrServer{StatusCode: resp.StatusCode, Message: string(body)}
+		}
+
+		if resp.StatusCode >= 400 {
+			return nil, &ErrNetwork{Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body))}
+		}
+
+		return body, nil
+	}
+
+	return nil, lastErr
+}
+
 // parseError parses API error response and returns appropriate error type.
 func parseError(errorCode, errorDesc string) error {
 	switch errorCode {
@@ -118,7 +171,8 @@ func parseError(errorCode, errorDesc string) error {
 		return newAuthenticationError(errorCode, errorDesc)
 	case "ERROR_ZERO_BALANCE", "ERROR_NO_SLOT_AVAILABLE":
 		return newInsufficientBalanceError(errorCode, errorDesc)
-	case "ERROR_INVALID_TASK_DATA", "ERROR_TASK_ABSENT", "ERROR_TASK_NOT_SUPPORTED":
+	case "ERROR_INVALID_TASK_DATA", "ERROR_TASK_ABSENT", "ERROR_TASK_NOT_SUPPORTED",
+		"TASK_TYPE_COMING_SOON", "TASK_TYPE_INACTIVE":
 		return newValidationError(errorCode, errorDesc)
 	case "ERROR_TASK_NOT_FOUND":
 		return newTaskNotFoundError(errorCode, errorDesc)
@@ -196,6 +250,22 @@ func (c *Client) GetBalance() (float64, error) {
 	}
 
 	return resp.Balance, nil
+}
+
+// GetPricing retrieves pricing for all task types.
+// This is a public endpoint and does not require authentication.
+func (c *Client) GetPricing() ([]PricingItem, error) {
+	body, err := c.makeGetRequest("/pricing", 3)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp PricingResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, &ErrParse{Message: "Failed to parse pricing response", Err: err}
+	}
+
+	return resp.Pricing, nil
 }
 
 // Solve creates a task and polls until it's solved or times out.
