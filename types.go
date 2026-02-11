@@ -33,8 +33,9 @@ type TaskResult struct {
 
 // CreateTaskRequest represents the request for createTask.
 type CreateTaskRequest struct {
-	ClientKey string `json:"clientKey"`
-	Task      Task   `json:"task"`
+	ClientKey    string `json:"clientKey"`
+	Task         Task   `json:"task"`
+	DeveloperKey string `json:"developerKey,omitempty"`
 }
 
 // CreateTaskResponse represents the response from createTask.

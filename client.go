@@ -20,9 +20,10 @@ const (
 
 // Client is the CapBypass API client.
 type Client struct {
-	apiKey     string
-	baseURL    string
-	httpClient *http.Client
+	apiKey       string
+	developerKey string
+	baseURL      string
+	httpClient   *http.Client
 }
 
 // NewClient creates a new CapBypass client.
@@ -36,8 +37,9 @@ func NewClient(apiKey string) (*Client, error) {
 	}
 
 	return &Client{
-		apiKey:  apiKey,
-		baseURL: defaultBaseURL,
+		apiKey:       apiKey,
+		developerKey: os.Getenv("CAPBYPASS_DEVELOPER_KEY"),
+		baseURL:      defaultBaseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -47,6 +49,12 @@ func NewClient(apiKey string) (*Client, error) {
 // SetBaseURL sets a custom base URL for the API.
 func (c *Client) SetBaseURL(baseURL string) {
 	c.baseURL = baseURL
+}
+
+// SetDeveloperKey sets the developer affiliate key for commission attribution.
+// Can also be set via CAPBYPASS_DEVELOPER_KEY environment variable.
+func (c *Client) SetDeveloperKey(key string) {
+	c.developerKey = key
 }
 
 // makeRequest makes an HTTP request with retry logic.
@@ -184,8 +192,9 @@ func parseError(errorCode, errorDesc string) error {
 // CreateTask creates a new CAPTCHA solving task.
 func (c *Client) CreateTask(task Task) (string, error) {
 	req := CreateTaskRequest{
-		ClientKey: c.apiKey,
-		Task:      task,
+		ClientKey:    c.apiKey,
+		Task:         task,
+		DeveloperKey: c.developerKey,
 	}
 
 	body, err := c.makeRequest("/createTask", req, 3)
