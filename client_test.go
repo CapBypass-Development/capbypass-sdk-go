@@ -138,6 +138,28 @@ func TestCreateTask(t *testing.T) {
 		var validationErr *ErrValidation
 		assert.ErrorAs(t, err, &validationErr)
 	})
+
+	t.Run("invalid developer key", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"errorId":          1,
+				"errorCode":        "ERROR_INVALID_DEVELOPER_KEY",
+				"errorDescription": "Invalid developer key",
+			})
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+		client.SetDeveloperKey("DEV-invalid1234567")
+
+		_, err := client.CreateTask(Task{"type": "ReCaptchaV2TaskProxyLess"})
+
+		require.Error(t, err)
+		var validationErr *ErrValidation
+		assert.ErrorAs(t, err, &validationErr)
+	})
 }
 
 func TestGetTaskResult(t *testing.T) {

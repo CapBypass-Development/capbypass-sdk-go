@@ -180,7 +180,7 @@ func parseError(errorCode, errorDesc string) error {
 	case "ERROR_ZERO_BALANCE", "ERROR_NO_SLOT_AVAILABLE":
 		return newInsufficientBalanceError(errorCode, errorDesc)
 	case "ERROR_INVALID_TASK_DATA", "ERROR_TASK_ABSENT", "ERROR_TASK_NOT_SUPPORTED",
-		"TASK_TYPE_COMING_SOON", "TASK_TYPE_INACTIVE":
+		"TASK_TYPE_COMING_SOON", "TASK_TYPE_INACTIVE", "ERROR_INVALID_DEVELOPER_KEY":
 		return newValidationError(errorCode, errorDesc)
 	case "ERROR_TASK_NOT_FOUND":
 		return newTaskNotFoundError(errorCode, errorDesc)
