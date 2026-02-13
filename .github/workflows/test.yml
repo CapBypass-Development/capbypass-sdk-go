@@ -38,7 +38,7 @@ jobs:
         file: ./coverage.txt
 
     - name: Run integration tests
-      if: secrets.CAPBYPASS_API_KEY != ''
+      if: ${{ secrets.CAPBYPASS_API_KEY != '' }}
       env:
         CAPBYPASS_API_KEY: ${{ secrets.CAPBYPASS_API_KEY }}
       run: go test -v -tags=integration
