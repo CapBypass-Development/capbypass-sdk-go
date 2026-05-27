@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/CapBypass-Development/capbypass-sdk-go)](https://goreportcard.com/report/github.com/CapBypass-Development/capbypass-sdk-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Official Go SDK for the CapBypass CAPTCHA solving service. Supports reCAPTCHA v2, reCAPTCHA v3, and AWS WAF challenges.
+Official Go SDK for the [CapBypass](https://capbypass.pro) CAPTCHA solving service. Supports reCAPTCHA v2, reCAPTCHA v3, and AWS WAF challenges.
 
 ## Features
 
@@ -251,7 +251,10 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Links
 
-- [Documentation](https://capbypass.dev/docs/sdks/go)
+- [Website](https://capbypass.pro)
+- [Documentation](https://capbypass.pro/docs/sdks/go)
+- [Dashboard / Sign up](https://capbypass.pro/signup)
+- [Pricing](https://capbypass.pro/pricing)
 - [API Reference](https://pkg.go.dev/github.com/CapBypass-Development/capbypass-sdk-go)
 - [GitHub Repository](https://github.com/CapBypass-Development/capbypass-sdk-go)
 - [Bug Reports](https://github.com/CapBypass-Development/capbypass-sdk-go/issues)
