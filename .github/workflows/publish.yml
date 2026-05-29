@@ -31,8 +31,15 @@ jobs:
     - name: Run unit tests
       run: go test -v -race -coverprofile=coverage.txt -covermode=atomic
 
+    - name: Detect integration secret
+      id: intsecret
+      env:
+        CAPBYPASS_API_KEY: ${{ secrets.CAPBYPASS_API_KEY }}
+      run: |
+        [ -n "$CAPBYPASS_API_KEY" ] && echo "available=true" >> "$GITHUB_OUTPUT" || echo "available=false" >> "$GITHUB_OUTPUT"
+
     - name: Run integration tests
-      if: ${{ secrets.CAPBYPASS_API_KEY != '' }}
+      if: steps.intsecret.outputs.available == 'true'
       env:
         CAPBYPASS_API_KEY: ${{ secrets.CAPBYPASS_API_KEY }}
       run: go test -v -tags=integration
