@@ -33,3 +33,7 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+
+# stray npm artifacts (not a node project)
+node_modules/
+package-lock.json
