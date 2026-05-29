@@ -174,16 +174,24 @@ func (c *Client) makeGetRequest(endpoint string, maxRetries int) ([]byte, error)
 
 // parseError parses API error response and returns appropriate error type.
 func parseError(errorCode, errorDesc string) error {
+	// Codes mirror the gateway contract in @solver-platform/shared errors.ts.
 	switch errorCode {
-	case "ERROR_KEY_DOES_NOT_EXIST", "ERROR_KEY_DENIED_ACCESS":
+	case "ERROR_KEY_DOES_NOT_EXIST":
 		return newAuthenticationError(errorCode, errorDesc)
-	case "ERROR_ZERO_BALANCE", "ERROR_NO_SLOT_AVAILABLE":
+	case "ERROR_ZERO_BALANCE":
 		return newInsufficientBalanceError(errorCode, errorDesc)
-	case "ERROR_INVALID_TASK_DATA", "ERROR_TASK_ABSENT", "ERROR_TASK_NOT_SUPPORTED",
-		"TASK_TYPE_COMING_SOON", "TASK_TYPE_INACTIVE", "ERROR_INVALID_DEVELOPER_KEY":
+	case "ERROR_INVALID_TASK_DATA", "ERROR_INVALID_DEVELOPER_KEY",
+		"ERROR_PROXY_NOT_DEFINED", "ERROR_WRONG_TASK_TYPE",
+		"ERROR_TASK_TYPE_COMING_SOON", "ERROR_TASK_TYPE_INACTIVE":
 		return newValidationError(errorCode, errorDesc)
 	case "ERROR_TASK_NOT_FOUND":
 		return newTaskNotFoundError(errorCode, errorDesc)
+	case "ERROR_CAPTCHA_UNSOLVABLE":
+		return newSolverError(errorDesc)
+	case "ERROR_TIMEOUT":
+		return newTimeoutError()
+	// ERROR_TASK_QUEUE_FULL, ERROR_WORKER_CRASHED, ERROR_INTERNAL, and any
+	// unknown code -> retryable internal failure.
 	default:
 		return newInternalError(errorCode, errorDesc)
 	}

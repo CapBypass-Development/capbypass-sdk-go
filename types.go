@@ -17,6 +17,14 @@ const (
 	// reCAPTCHA v3 Enterprise task types
 	TaskTypeReCaptchaV3Enterprise          = "ReCaptchaV3EnterpriseTask"
 	TaskTypeReCaptchaV3EnterpriseProxyLess = "ReCaptchaV3EnterpriseTaskProxyLess"
+
+	// GeeTest v3 + v4 task types
+	TaskTypeGeetest          = "GeetestTask"
+	TaskTypeGeetestProxyLess = "GeetestTaskProxyLess"
+
+	// hCaptcha task types
+	TaskTypeHCaptcha          = "HCaptchaTask"
+	TaskTypeHCaptchaProxyLess = "HCaptchaTaskProxyless"
 )
 
 // Task represents a CAPTCHA solving task.
