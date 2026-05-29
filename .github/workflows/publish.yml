@@ -46,7 +46,11 @@ jobs:
 
     - name: Determine next version
       run: |
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        # Highest existing semver tag, independent of commit ancestry. Using
+        # `git describe` was ambiguous when v1.0.3/v1.0.4 share a commit and
+        # could recompute an existing version -> "tag already exists".
+        LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+        LATEST_TAG=${LATEST_TAG:-v0.0.0}
         IFS='.' read -r major minor patch <<< "${LATEST_TAG#v}"
         NEW_VERSION="$major.$minor.$((patch + 1))"
         echo "VERSION=$NEW_VERSION" >> $GITHUB_ENV
