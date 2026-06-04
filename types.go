@@ -25,6 +25,10 @@ const (
 	// hCaptcha task types
 	TaskTypeHCaptcha          = "HCaptchaTask"
 	TaskTypeHCaptchaProxyLess = "HCaptchaTaskProxyless"
+
+	// CaptchaFox task types
+	TaskTypeCaptchaFox          = "CaptchaFoxTask"
+	TaskTypeCaptchaFoxProxyLess = "CaptchaFoxTaskProxyLess"
 )
 
 // Task represents a CAPTCHA solving task.
