@@ -439,6 +439,334 @@ func TestRetryLogic(t *testing.T) {
 	})
 }
 
+func TestGetPricing(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/pricing", r.URL.Path)
+			assert.Equal(t, "GET", r.Method)
+			assert.Contains(t, r.Header.Get("User-Agent"), "capbypass-sdk-go")
+
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(PricingResponse{
+				Pricing: []PricingItem{
+					{TaskType: TaskTypeReCaptchaV2ProxyLess, UserCost: 1.5, Status: "active"},
+					{TaskType: TaskTypeHCaptcha, UserCost: 2.0, Status: "active"},
+				},
+			})
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+
+		pricing, err := client.GetPricing()
+
+		require.NoError(t, err)
+		require.Len(t, pricing, 2)
+		assert.Equal(t, TaskTypeReCaptchaV2ProxyLess, pricing[0].TaskType)
+		assert.Equal(t, 1.5, pricing[0].UserCost)
+		assert.Equal(t, "active", pricing[0].Status)
+	})
+
+	t.Run("invalid JSON body", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("not json"))
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+
+		_, err := client.GetPricing()
+
+		require.Error(t, err)
+		var parseErr *ErrParse
+		assert.ErrorAs(t, err, &parseErr)
+	})
+
+	t.Run("server error 500", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("boom"))
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+
+		_, err := client.GetPricing()
+
+		require.Error(t, err)
+		var serverErr *ErrServer
+		assert.ErrorAs(t, err, &serverErr)
+	})
+
+	t.Run("client error 404", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("not found"))
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+
+		_, err := client.GetPricing()
+
+		require.Error(t, err)
+		var netErr *ErrNetwork
+		assert.ErrorAs(t, err, &netErr)
+	})
+
+	t.Run("connection failure", func(t *testing.T) {
+		client, _ := NewClient("test-key")
+		// Point at a closed port so the GET dial fails (covers makeGetRequest network path).
+		client.SetBaseURL("http://127.0.0.1:1")
+
+		_, err := client.GetPricing()
+
+		require.Error(t, err)
+		var netErr *ErrNetwork
+		assert.ErrorAs(t, err, &netErr)
+		assert.Contains(t, err.Error(), "Connection failed")
+	})
+}
+
+func TestGetPricingGatewayRetry(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(PricingResponse{
+			Pricing: []PricingItem{{TaskType: TaskTypeHCaptcha, UserCost: 2.0, Status: "active"}},
+		})
+	}))
+	defer server.Close()
+
+	client, _ := NewClient("test-key")
+	client.SetBaseURL(server.URL)
+
+	pricing, err := client.GetPricing()
+
+	require.NoError(t, err)
+	require.Len(t, pricing, 1)
+	assert.Equal(t, 2, callCount) // initial 502 + 1 retry success
+}
+
+func TestGetBalanceErrors(t *testing.T) {
+	t.Run("api error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(GetBalanceResponse{
+				ErrorID:          1,
+				ErrorCode:        "ERROR_KEY_DOES_NOT_EXIST",
+				ErrorDescription: "Account not found",
+			})
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+
+		balance, err := client.GetBalance()
+
+		require.Error(t, err)
+		assert.Equal(t, 0.0, balance)
+		var authErr *ErrAuthentication
+		assert.ErrorAs(t, err, &authErr)
+	})
+
+	t.Run("invalid JSON body", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("{not-json"))
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+
+		_, err := client.GetBalance()
+
+		require.Error(t, err)
+		var parseErr *ErrParse
+		assert.ErrorAs(t, err, &parseErr)
+	})
+}
+
+// TestParseErrorBranches covers the remaining parseError switch arms that
+// createTask/getTaskResult tests don't already exercise.
+func TestParseErrorBranches(t *testing.T) {
+	cases := []struct {
+		name   string
+		code   string
+		assert func(t *testing.T, err error)
+	}{
+		{
+			name: "captcha unsolvable -> solver",
+			code: "ERROR_CAPTCHA_UNSOLVABLE",
+			assert: func(t *testing.T, err error) {
+				var e *ErrSolver
+				assert.ErrorAs(t, err, &e)
+			},
+		},
+		{
+			name: "timeout -> timeout",
+			code: "ERROR_TIMEOUT",
+			assert: func(t *testing.T, err error) {
+				var e *ErrTimeout
+				assert.ErrorAs(t, err, &e)
+			},
+		},
+		{
+			name: "proxy not defined -> validation",
+			code: "ERROR_PROXY_NOT_DEFINED",
+			assert: func(t *testing.T, err error) {
+				var e *ErrValidation
+				assert.ErrorAs(t, err, &e)
+			},
+		},
+		{
+			name: "wrong task type -> validation",
+			code: "ERROR_WRONG_TASK_TYPE",
+			assert: func(t *testing.T, err error) {
+				var e *ErrValidation
+				assert.ErrorAs(t, err, &e)
+			},
+		},
+		{
+			name: "task type coming soon -> validation",
+			code: "ERROR_TASK_TYPE_COMING_SOON",
+			assert: func(t *testing.T, err error) {
+				var e *ErrValidation
+				assert.ErrorAs(t, err, &e)
+			},
+		},
+		{
+			name: "task type inactive -> validation",
+			code: "ERROR_TASK_TYPE_INACTIVE",
+			assert: func(t *testing.T, err error) {
+				var e *ErrValidation
+				assert.ErrorAs(t, err, &e)
+			},
+		},
+		{
+			name: "queue full -> internal (default)",
+			code: "ERROR_TASK_QUEUE_FULL",
+			assert: func(t *testing.T, err error) {
+				var e *ErrInternal
+				assert.ErrorAs(t, err, &e)
+			},
+		},
+		{
+			name: "unknown code -> internal (default)",
+			code: "ERROR_SOMETHING_NEW",
+			assert: func(t *testing.T, err error) {
+				var e *ErrInternal
+				assert.ErrorAs(t, err, &e)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := parseError(tc.code, "desc for "+tc.code)
+			require.Error(t, err)
+			tc.assert(t, err)
+		})
+	}
+}
+
+// TestMakeRequestErrorBranches covers makeRequest non-retry HTTP error paths
+// (429 rate limit, 500 server error, generic 4xx) and a non-JSON 200 body.
+func TestMakeRequestErrorBranches(t *testing.T) {
+	t.Run("rate limit 429", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte("slow down"))
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+
+		_, err := client.GetBalance()
+
+		require.Error(t, err)
+		var rlErr *ErrRateLimit
+		assert.ErrorAs(t, err, &rlErr)
+	})
+
+	t.Run("server 500", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("kaboom"))
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+
+		_, err := client.GetBalance()
+
+		require.Error(t, err)
+		var serverErr *ErrServer
+		assert.ErrorAs(t, err, &serverErr)
+	})
+
+	t.Run("generic 4xx", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte("forbidden"))
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+
+		_, err := client.GetBalance()
+
+		require.Error(t, err)
+		var netErr *ErrNetwork
+		assert.ErrorAs(t, err, &netErr)
+		assert.Contains(t, err.Error(), "HTTP 403")
+	})
+
+	t.Run("non-JSON 200 body", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("<html>not json</html>"))
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+
+		_, err := client.GetBalance()
+
+		require.Error(t, err)
+		var parseErr *ErrParse
+		assert.ErrorAs(t, err, &parseErr)
+	})
+
+	t.Run("connection failure", func(t *testing.T) {
+		client, _ := NewClient("test-key")
+		client.SetBaseURL("http://127.0.0.1:1")
+
+		_, err := client.GetBalance()
+
+		require.Error(t, err)
+		var netErr *ErrNetwork
+		assert.ErrorAs(t, err, &netErr)
+		assert.Contains(t, err.Error(), "Connection failed")
+	})
+}
+
 func TestAdaptivePolling(t *testing.T) {
 	callTimes := []time.Time{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
