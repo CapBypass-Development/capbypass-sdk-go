@@ -181,7 +181,8 @@ func parseError(errorCode, errorDesc string) error {
 	case "ERROR_ZERO_BALANCE":
 		return newInsufficientBalanceError(errorCode, errorDesc)
 	case "ERROR_INVALID_TASK_DATA", "ERROR_INVALID_DEVELOPER_KEY",
-		"ERROR_PROXY_NOT_DEFINED", "ERROR_WRONG_TASK_TYPE",
+		"ERROR_PROXY_NOT_DEFINED", "ERROR_PROXY_CONNECTION_FAILED",
+		"ERROR_PROXY_BANNED", "ERROR_WRONG_TASK_TYPE",
 		"ERROR_TASK_TYPE_COMING_SOON", "ERROR_TASK_TYPE_INACTIVE":
 		return newValidationError(errorCode, errorDesc)
 	case "ERROR_TASK_NOT_FOUND":
