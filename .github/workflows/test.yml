@@ -53,3 +53,20 @@ jobs:
     - name: Check coverage
       run: |
         go tool cover -func=coverage.txt | grep total | awk '{if ($3+0 < 80) {print "Coverage is below 80%"; exit 1}}'
+
+  # Single stable gate context for branch protection (the matrix job names like
+  # "test (1.22)" are version-specific and brittle to require directly).
+  tests-passed:
+    name: tests-passed
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate on the test matrix
+        run: |
+          r="${{ needs.test.result }}"
+          if [ "$r" = "success" ] || [ "$r" = "skipped" ]; then
+            echo "tests-passed: $r"
+          else
+            echo "test matrix result: $r"; exit 1
+          fi
