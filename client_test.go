@@ -54,7 +54,7 @@ func TestCreateTask(t *testing.T) {
 			assert.Contains(t, r.Header.Get("User-Agent"), "capbypass-sdk-go")
 
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(CreateTaskResponse{
+			_ = json.NewEncoder(w).Encode(CreateTaskResponse{
 				ErrorID: 0,
 				TaskID:  "test-task-id-123",
 			})
@@ -77,7 +77,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("invalid API key", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(CreateTaskResponse{
+			_ = json.NewEncoder(w).Encode(CreateTaskResponse{
 				ErrorID:          1,
 				ErrorCode:        "ERROR_KEY_DOES_NOT_EXIST",
 				ErrorDescription: "Account not found",
@@ -100,7 +100,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("zero balance", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(CreateTaskResponse{
+			_ = json.NewEncoder(w).Encode(CreateTaskResponse{
 				ErrorID:          1,
 				ErrorCode:        "ERROR_ZERO_BALANCE",
 				ErrorDescription: "Insufficient balance",
@@ -121,7 +121,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("invalid task data", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(CreateTaskResponse{
+			_ = json.NewEncoder(w).Encode(CreateTaskResponse{
 				ErrorID:          1,
 				ErrorCode:        "ERROR_INVALID_TASK_DATA",
 				ErrorDescription: "Invalid task type",
@@ -142,7 +142,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("invalid developer key", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"errorId":          1,
 				"errorCode":        "ERROR_INVALID_DEVELOPER_KEY",
 				"errorDescription": "Invalid developer key",
@@ -164,7 +164,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("proxy connection failed", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(CreateTaskResponse{
+			_ = json.NewEncoder(w).Encode(CreateTaskResponse{
 				ErrorID:          1,
 				ErrorCode:        "ERROR_PROXY_CONNECTION_FAILED",
 				ErrorDescription: "Could not connect through proxy",
@@ -185,7 +185,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("proxy banned", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(CreateTaskResponse{
+			_ = json.NewEncoder(w).Encode(CreateTaskResponse{
 				ErrorID:          1,
 				ErrorCode:        "ERROR_PROXY_BANNED",
 				ErrorDescription: "Proxy IP blocked by target",
@@ -208,7 +208,7 @@ func TestGetTaskResult(t *testing.T) {
 	t.Run("processing", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(TaskResult{
+			_ = json.NewEncoder(w).Encode(TaskResult{
 				ErrorID: 0,
 				Status:  "processing",
 			})
@@ -227,7 +227,7 @@ func TestGetTaskResult(t *testing.T) {
 	t.Run("ready", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(TaskResult{
+			_ = json.NewEncoder(w).Encode(TaskResult{
 				ErrorID: 0,
 				Status:  "ready",
 				Solution: map[string]interface{}{
@@ -250,7 +250,7 @@ func TestGetTaskResult(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(TaskResult{
+			_ = json.NewEncoder(w).Encode(TaskResult{
 				ErrorID:          16,
 				ErrorCode:        "ERROR_TASK_NOT_FOUND",
 				ErrorDescription: "Task not found",
@@ -274,7 +274,7 @@ func TestGetBalance(t *testing.T) {
 		assert.Equal(t, "/getBalance", r.URL.Path)
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(GetBalanceResponse{
+		_ = json.NewEncoder(w).Encode(GetBalanceResponse{
 			ErrorID: 0,
 			Balance: 42.5,
 		})
@@ -297,19 +297,19 @@ func TestSolve(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 
 			if r.URL.Path == "/createTask" {
-				json.NewEncoder(w).Encode(CreateTaskResponse{
+				_ = json.NewEncoder(w).Encode(CreateTaskResponse{
 					ErrorID: 0,
 					TaskID:  "test-task-id",
 				})
 			} else if r.URL.Path == "/getTaskResult" {
 				callCount++
 				if callCount == 1 {
-					json.NewEncoder(w).Encode(TaskResult{
+					_ = json.NewEncoder(w).Encode(TaskResult{
 						ErrorID: 0,
 						Status:  "processing",
 					})
 				} else {
-					json.NewEncoder(w).Encode(TaskResult{
+					_ = json.NewEncoder(w).Encode(TaskResult{
 						ErrorID: 0,
 						Status:  "ready",
 						Solution: map[string]interface{}{
@@ -339,12 +339,12 @@ func TestSolve(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 
 			if r.URL.Path == "/createTask" {
-				json.NewEncoder(w).Encode(CreateTaskResponse{
+				_ = json.NewEncoder(w).Encode(CreateTaskResponse{
 					ErrorID: 0,
 					TaskID:  "test-task-id",
 				})
 			} else if r.URL.Path == "/getTaskResult" {
-				json.NewEncoder(w).Encode(TaskResult{
+				_ = json.NewEncoder(w).Encode(TaskResult{
 					ErrorID:          0,
 					Status:           "failed",
 					ErrorDescription: "CAPTCHA unsolvable",
@@ -368,12 +368,12 @@ func TestSolve(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 
 			if r.URL.Path == "/createTask" {
-				json.NewEncoder(w).Encode(CreateTaskResponse{
+				_ = json.NewEncoder(w).Encode(CreateTaskResponse{
 					ErrorID: 0,
 					TaskID:  "test-task-id",
 				})
 			} else if r.URL.Path == "/getTaskResult" {
-				json.NewEncoder(w).Encode(TaskResult{
+				_ = json.NewEncoder(w).Encode(TaskResult{
 					ErrorID: 0,
 					Status:  "processing",
 				})
@@ -402,7 +402,7 @@ func TestRetryLogic(t *testing.T) {
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(GetBalanceResponse{
+			_ = json.NewEncoder(w).Encode(GetBalanceResponse{
 				ErrorID: 0,
 				Balance: 10.0,
 			})
@@ -445,14 +445,14 @@ func TestAdaptivePolling(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 
 		if r.URL.Path == "/createTask" {
-			json.NewEncoder(w).Encode(CreateTaskResponse{
+			_ = json.NewEncoder(w).Encode(CreateTaskResponse{
 				ErrorID: 0,
 				TaskID:  "test-task-id",
 			})
 		} else if r.URL.Path == "/getTaskResult" {
 			callTimes = append(callTimes, time.Now())
 			if len(callTimes) >= 7 {
-				json.NewEncoder(w).Encode(TaskResult{
+				_ = json.NewEncoder(w).Encode(TaskResult{
 					ErrorID: 0,
 					Status:  "ready",
 					Solution: map[string]interface{}{
@@ -460,7 +460,7 @@ func TestAdaptivePolling(t *testing.T) {
 					},
 				})
 			} else {
-				json.NewEncoder(w).Encode(TaskResult{
+				_ = json.NewEncoder(w).Encode(TaskResult{
 					ErrorID: 0,
 					Status:  "processing",
 				})
