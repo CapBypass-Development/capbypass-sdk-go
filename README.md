@@ -258,3 +258,5 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - [API Reference](https://pkg.go.dev/github.com/CapBypass-Development/capbypass-sdk-go)
 - [GitHub Repository](https://github.com/CapBypass-Development/capbypass-sdk-go)
 - [Bug Reports](https://github.com/CapBypass-Development/capbypass-sdk-go/issues)
+
+<!-- ci gate validation, throwaway -->
