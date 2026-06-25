@@ -160,6 +160,48 @@ func TestCreateTask(t *testing.T) {
 		var validationErr *ErrValidation
 		assert.ErrorAs(t, err, &validationErr)
 	})
+
+	t.Run("proxy connection failed", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(CreateTaskResponse{
+				ErrorID:          1,
+				ErrorCode:        "ERROR_PROXY_CONNECTION_FAILED",
+				ErrorDescription: "Could not connect through proxy",
+			})
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+
+		_, err := client.CreateTask(Task{"type": "ReCaptchaV2Task"})
+
+		require.Error(t, err)
+		var validationErr *ErrValidation
+		assert.ErrorAs(t, err, &validationErr)
+	})
+
+	t.Run("proxy banned", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(CreateTaskResponse{
+				ErrorID:          1,
+				ErrorCode:        "ERROR_PROXY_BANNED",
+				ErrorDescription: "Proxy IP blocked by target",
+			})
+		}))
+		defer server.Close()
+
+		client, _ := NewClient("test-key")
+		client.SetBaseURL(server.URL)
+
+		_, err := client.CreateTask(Task{"type": "ReCaptchaV2Task"})
+
+		require.Error(t, err)
+		var validationErr *ErrValidation
+		assert.ErrorAs(t, err, &validationErr)
+	})
 }
 
 func TestGetTaskResult(t *testing.T) {
