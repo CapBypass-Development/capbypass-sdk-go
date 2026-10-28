@@ -767,53 +767,109 @@ func TestMakeRequestErrorBranches(t *testing.T) {
 	})
 }
 
-func TestAdaptivePolling(t *testing.T) {
-	callTimes := []time.Time{}
+// fakeClockClient returns a client whose clock only moves when the SDK sleeps.
+// events records "sleep <d>" and "poll" in call order.
+func fakeClockClient(t *testing.T, readyAfter int) (*Client, *[]string) {
+	t.Helper()
+
+	events := []string{}
+	polls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 
-		if r.URL.Path == "/createTask" {
-			_ = json.NewEncoder(w).Encode(CreateTaskResponse{
-				ErrorID: 0,
-				TaskID:  "test-task-id",
-			})
-		} else if r.URL.Path == "/getTaskResult" {
-			callTimes = append(callTimes, time.Now())
-			if len(callTimes) >= 7 {
+		switch r.URL.Path {
+		case "/createTask":
+			_ = json.NewEncoder(w).Encode(CreateTaskResponse{ErrorID: 0, TaskID: "test-task-id"})
+		case "/getTaskResult":
+			polls++
+			events = append(events, "poll")
+			if readyAfter > 0 && polls >= readyAfter {
 				_ = json.NewEncoder(w).Encode(TaskResult{
-					ErrorID: 0,
-					Status:  "ready",
-					Solution: map[string]interface{}{
-						"token": "test",
-					},
+					ErrorID:  0,
+					Status:   "ready",
+					Solution: map[string]interface{}{"token": "test"},
 				})
 			} else {
-				_ = json.NewEncoder(w).Encode(TaskResult{
-					ErrorID: 0,
-					Status:  "processing",
-				})
+				_ = json.NewEncoder(w).Encode(TaskResult{ErrorID: 0, Status: "processing"})
 			}
 		}
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
-	client, _ := NewClient("test-key")
+	client, err := NewClient("test-key")
+	require.NoError(t, err)
 	client.SetBaseURL(server.URL)
 
-	_, err := client.Solve(Task{"type": TaskTypeReCaptchaV2ProxyLess}, 120)
-	require.NoError(t, err)
-
-	// Verify polling intervals: 1s, 1s, 2s, 2s, 3s, 3s
-	for i := 1; i < len(callTimes); i++ {
-		interval := callTimes[i].Sub(callTimes[i-1]).Seconds()
-		var expectedInterval float64
-		if i <= 2 {
-			expectedInterval = 1.0
-		} else if i <= 4 {
-			expectedInterval = 2.0
-		} else {
-			expectedInterval = 3.0
-		}
-		assert.InDelta(t, expectedInterval, interval, 0.5, "Polling interval %d", i)
+	clock := time.Unix(0, 0)
+	client.now = func() time.Time { return clock }
+	client.sleep = func(d time.Duration) {
+		events = append(events, "sleep "+d.String())
+		clock = clock.Add(d)
 	}
+
+	return client, &events
+}
+
+func TestPollDelay(t *testing.T) {
+	want := []time.Duration{1, 1, 1, 2, 2, 3, 3, 3, 3}
+	for i, w := range want {
+		assert.Equal(t, w*time.Second, pollDelay(i+1), "wait before poll %d", i+1)
+	}
+}
+
+func TestSolvePollSchedule(t *testing.T) {
+	client, events := fakeClockClient(t, 8)
+
+	solution, err := client.Solve(Task{"type": TaskTypeReCaptchaV2ProxyLess}, 120)
+	require.NoError(t, err)
+	assert.Equal(t, "test", solution["token"])
+
+	// Every poll is preceded by its wait; the first wait comes before the first poll.
+	assert.Equal(t, []string{
+		"sleep 1s", "poll",
+		"sleep 1s", "poll",
+		"sleep 1s", "poll",
+		"sleep 2s", "poll",
+		"sleep 2s", "poll",
+		"sleep 3s", "poll",
+		"sleep 3s", "poll",
+		"sleep 3s", "poll",
+	}, *events)
+}
+
+func TestSolveTimeoutHonoured(t *testing.T) {
+	// Waits 1,1,1,2,2 end at 1, 2, 3, 5 and 7 s. A 5 s timeout still allows
+	// the poll at 5 s (elapsed is not above the timeout) and stops at the
+	// wait that ends at 7 s: four polls.
+	client, events := fakeClockClient(t, 0)
+
+	_, err := client.Solve(Task{"type": TaskTypeReCaptchaV2ProxyLess}, 5)
+
+	var timeoutErr *ErrTimeout
+	require.ErrorAs(t, err, &timeoutErr)
+	polls := 0
+	for _, e := range *events {
+		if e == "poll" {
+			polls++
+		}
+	}
+	assert.Equal(t, 4, polls)
+}
+
+func TestSolveDefaultTimeout(t *testing.T) {
+	// timeout 0 means 120 s. After the 7 s ramp (1+1+1+2+2) the waits are 3 s:
+	// the 37th ends at 118 s, the 38th at 121 s.
+	client, events := fakeClockClient(t, 0)
+
+	_, err := client.Solve(Task{"type": TaskTypeReCaptchaV2ProxyLess}, 0)
+
+	var timeoutErr *ErrTimeout
+	require.ErrorAs(t, err, &timeoutErr)
+	polls := 0
+	for _, e := range *events {
+		if e == "poll" {
+			polls++
+		}
+	}
+	assert.Equal(t, 5+37, polls)
 }

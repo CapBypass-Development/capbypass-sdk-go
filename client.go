@@ -24,6 +24,10 @@ type Client struct {
 	developerKey string
 	baseURL      string
 	httpClient   *http.Client
+
+	// Clock seams for tests; time.Now and time.Sleep in production.
+	now   func() time.Time
+	sleep func(time.Duration)
 }
 
 // NewClient creates a new CapBypass client.
@@ -43,6 +47,8 @@ func NewClient(apiKey string) (*Client, error) {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		now:   time.Now,
+		sleep: time.Sleep,
 	}, nil
 }
 
@@ -286,7 +292,26 @@ func (c *Client) GetPricing() ([]PricingItem, error) {
 	return resp.Pricing, nil
 }
 
+// pollDelays are the waits before the first polls of a task. The first
+// getTaskResult comes 1 s after createTask, then the interval grows to
+// maxPollDelay. This stays inside the documented range (poll every 1 to 3
+// seconds, never faster).
+var pollDelays = [...]time.Duration{time.Second, time.Second, time.Second, 2 * time.Second, 2 * time.Second}
+
+const maxPollDelay = 3 * time.Second
+
+// pollDelay returns the wait before the given poll (1-based): 1s, 1s, 1s, 2s, 2s, then 3s.
+func pollDelay(poll int) time.Duration {
+	if poll >= 1 && poll <= len(pollDelays) {
+		return pollDelays[poll-1]
+	}
+	return maxPollDelay
+}
+
 // Solve creates a task and polls until it's solved or times out.
+// The first poll happens 1 s after the task is created, then every 1 s for
+// the first three polls, growing to 3 s. timeout (seconds, default 120) is
+// the maximum wait counted from the end of CreateTask.
 func (c *Client) Solve(task Task, timeout int) (map[string]interface{}, error) {
 	if timeout == 0 {
 		timeout = 120
@@ -297,11 +322,12 @@ func (c *Client) Solve(task Task, timeout int) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	startTime := time.Now()
-	attempt := 0
+	startTime := c.now()
 
-	for {
-		elapsed := time.Since(startTime).Seconds()
+	for poll := 1; ; poll++ {
+		c.sleep(pollDelay(poll))
+
+		elapsed := c.now().Sub(startTime).Seconds()
 		if elapsed > float64(timeout) {
 			return nil, newTimeoutError()
 		}
@@ -322,10 +348,5 @@ func (c *Client) Solve(task Task, timeout int) (map[string]interface{}, error) {
 			}
 			return nil, newSolverError(errDesc)
 		}
-
-		// Adaptive polling: min(5, ceil(attempt / 2))
-		attempt++
-		pollInterval := int(math.Min(5, math.Ceil(float64(attempt)/2)))
-		time.Sleep(time.Duration(pollInterval) * time.Second)
 	}
 }
