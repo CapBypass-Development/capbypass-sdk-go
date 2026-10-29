@@ -9,7 +9,7 @@ Official Go SDK for the [CapBypass](https://capbypass.pro) CAPTCHA solving servi
 ## Features
 
 - ✅ **Simple API**: One-line `Solve()` method or advanced `CreateTask()`/`GetTaskResult()` control
-- 🔄 **Automatic Polling**: Built-in adaptive polling with exponential backoff
+- 🔄 **Automatic Polling**: Built-in adaptive polling (first poll after 1 s, then every 1-3 s)
 - 🛡️ **Robust Error Handling**: Typed errors for all API and network failures
 - 🔁 **Smart Retry Logic**: Automatic retry on network/gateway errors
 - 🎯 **Type-Safe**: Full Go type safety with structs and constants
@@ -76,6 +76,8 @@ solution, err := client.Solve(task, timeout)
 - `timeout`: Maximum wait time in seconds (default: 120)
 - Returns: Solution map or error
 
+`Solve` waits 1 s after creating the task before its first `getTaskResult` request, then waits 1, 1, 2 and 2 s between the next requests, and 3 s between requests from then on. These are waits between requests: the time a request itself takes comes on top. `timeout` is counted from the end of `CreateTask` and is not changed by the waiting schedule.
+
 ### Advanced API
 
 For full control over task lifecycle:
@@ -84,8 +86,28 @@ For full control over task lifecycle:
 // Create task
 taskID, err := client.CreateTask(task)
 
-// Poll for result
-result, err := client.GetTaskResult(taskID)
+// Poll for result. GetTaskResult does not wait by itself: wait 1 s after
+// CreateTask, then 1 to 3 s between calls (not faster), until the task is
+// ready or failed, and give up after your own deadline.
+deadline := time.Now().Add(120 * time.Second)
+time.Sleep(1 * time.Second)
+for {
+    result, err := client.GetTaskResult(taskID)
+    if err != nil {
+        return err
+    }
+    if result.Status == "ready" {
+        fmt.Println(result.Solution)
+        break
+    }
+    if result.Status == "failed" {
+        return fmt.Errorf("task failed: %s", result.ErrorDescription)
+    }
+    if time.Now().After(deadline) {
+        return errors.New("timed out waiting for the task")
+    }
+    time.Sleep(2 * time.Second)
+}
 
 // Check balance
 balance, err := client.GetBalance()
