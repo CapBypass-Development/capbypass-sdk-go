@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -767,13 +768,41 @@ func TestMakeRequestErrorBranches(t *testing.T) {
 	})
 }
 
+// eventLog records "sleep <d>" and "poll" in call order. The HTTP handler
+// (server goroutine) and the SDK sleep hook (test goroutine) both write to
+// it, so every access goes through the mutex.
+type eventLog struct {
+	mu     sync.Mutex
+	events []string
+}
+
+func (l *eventLog) add(e string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.events = append(l.events, e)
+}
+
+func (l *eventLog) snapshot() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.events...)
+}
+
+func (l *eventLog) count(e string) int {
+	n := 0
+	for _, got := range l.snapshot() {
+		if got == e {
+			n++
+		}
+	}
+	return n
+}
+
 // fakeClockClient returns a client whose clock only moves when the SDK sleeps.
-// events records "sleep <d>" and "poll" in call order.
-func fakeClockClient(t *testing.T, readyAfter int) (*Client, *[]string) {
+func fakeClockClient(t *testing.T, readyAfter int) (*Client, *eventLog) {
 	t.Helper()
 
-	events := []string{}
-	polls := 0
+	log := &eventLog{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 
@@ -781,9 +810,8 @@ func fakeClockClient(t *testing.T, readyAfter int) (*Client, *[]string) {
 		case "/createTask":
 			_ = json.NewEncoder(w).Encode(CreateTaskResponse{ErrorID: 0, TaskID: "test-task-id"})
 		case "/getTaskResult":
-			polls++
-			events = append(events, "poll")
-			if readyAfter > 0 && polls >= readyAfter {
+			log.add("poll")
+			if polls := log.count("poll"); readyAfter > 0 && polls >= readyAfter {
 				_ = json.NewEncoder(w).Encode(TaskResult{
 					ErrorID:  0,
 					Status:   "ready",
@@ -803,11 +831,11 @@ func fakeClockClient(t *testing.T, readyAfter int) (*Client, *[]string) {
 	clock := time.Unix(0, 0)
 	client.now = func() time.Time { return clock }
 	client.sleep = func(d time.Duration) {
-		events = append(events, "sleep "+d.String())
+		log.add("sleep " + d.String())
 		clock = clock.Add(d)
 	}
 
-	return client, &events
+	return client, log
 }
 
 func TestPollDelay(t *testing.T) {
@@ -834,7 +862,7 @@ func TestSolvePollSchedule(t *testing.T) {
 		"sleep 3s", "poll",
 		"sleep 3s", "poll",
 		"sleep 3s", "poll",
-	}, *events)
+	}, events.snapshot())
 }
 
 func TestSolveTimeoutHonoured(t *testing.T) {
@@ -847,13 +875,7 @@ func TestSolveTimeoutHonoured(t *testing.T) {
 
 	var timeoutErr *ErrTimeout
 	require.ErrorAs(t, err, &timeoutErr)
-	polls := 0
-	for _, e := range *events {
-		if e == "poll" {
-			polls++
-		}
-	}
-	assert.Equal(t, 4, polls)
+	assert.Equal(t, 4, events.count("poll"))
 }
 
 func TestSolveDefaultTimeout(t *testing.T) {
@@ -865,11 +887,5 @@ func TestSolveDefaultTimeout(t *testing.T) {
 
 	var timeoutErr *ErrTimeout
 	require.ErrorAs(t, err, &timeoutErr)
-	polls := 0
-	for _, e := range *events {
-		if e == "poll" {
-			polls++
-		}
-	}
-	assert.Equal(t, 5+37, polls)
+	assert.Equal(t, 5+37, events.count("poll"))
 }

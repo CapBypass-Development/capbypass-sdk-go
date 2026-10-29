@@ -76,7 +76,7 @@ solution, err := client.Solve(task, timeout)
 - `timeout`: Maximum wait time in seconds (default: 120)
 - Returns: Solution map or error
 
-`Solve` polls `getTaskResult` after a wait of 1 s from task creation, then waits 1, 1, 2 and 2 s between the next polls, and 3 s from then on (never faster than 1 s, never slower than 3 s). `timeout` is counted from the end of `CreateTask` and is not changed by the polling schedule.
+`Solve` waits 1 s after creating the task before its first `getTaskResult` request, then waits 1, 1, 2 and 2 s between the next requests, and 3 s between requests from then on. These are waits between requests: the time a request itself takes comes on top. `timeout` is counted from the end of `CreateTask` and is not changed by the waiting schedule.
 
 ### Advanced API
 
@@ -86,8 +86,28 @@ For full control over task lifecycle:
 // Create task
 taskID, err := client.CreateTask(task)
 
-// Poll for result (every 1 to 3 seconds, starting about 1 second after CreateTask)
-result, err := client.GetTaskResult(taskID)
+// Poll for result. GetTaskResult does not wait by itself: wait 1 s after
+// CreateTask, then 1 to 3 s between calls (not faster), until the task is
+// ready or failed, and give up after your own deadline.
+deadline := time.Now().Add(120 * time.Second)
+time.Sleep(1 * time.Second)
+for {
+    result, err := client.GetTaskResult(taskID)
+    if err != nil {
+        return err
+    }
+    if result.Status == "ready" {
+        fmt.Println(result.Solution)
+        break
+    }
+    if result.Status == "failed" {
+        return fmt.Errorf("task failed: %s", result.ErrorDescription)
+    }
+    if time.Now().After(deadline) {
+        return errors.New("timed out waiting for the task")
+    }
+    time.Sleep(2 * time.Second)
+}
 
 // Check balance
 balance, err := client.GetBalance()
