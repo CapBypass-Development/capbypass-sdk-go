@@ -12,11 +12,7 @@ import (
 	"time"
 )
 
-const (
-	defaultBaseURL = "https://api.capbypass.pro"
-	sdkVersion     = "1.0.0"
-	userAgent      = "capbypass-sdk-go/" + sdkVersion
-)
+const defaultBaseURL = "https://api.capbypass.pro"
 
 // Client is the CapBypass API client.
 type Client struct {
