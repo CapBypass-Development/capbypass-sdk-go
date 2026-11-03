@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/CapBypass-Development/capbypass-sdk-go)](https://goreportcard.com/report/github.com/CapBypass-Development/capbypass-sdk-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Official Go SDK for the [CapBypass](https://capbypass.pro) CAPTCHA solving service. Supports reCAPTCHA v2, reCAPTCHA v3, and AWS WAF challenges.
+Official Go SDK for the [CapBypass](https://capbypass.pro) CAPTCHA solving service. Supports reCAPTCHA v2, reCAPTCHA v3, AWS WAF challenges, and Cloudflare Turnstile.
 
 ## Features
 
@@ -157,6 +157,32 @@ client.Solve(capbypass.Task{
 }, 120)
 ```
 
+### Cloudflare Turnstile
+
+`websiteURL` and `websiteKey` are required. `action` (1 to 32 characters of `A-Z a-z 0-9 _ -`) and `cData` (1 to 255 characters of the same set) are optional and replace the page's `data-action` / `data-cdata`. The solution holds `token` (the `cf-turnstile-response` value) and `timing.solveMs`; Turnstile returns no `userAgent`.
+
+```go
+solution, err := client.Solve(capbypass.Task{
+    "type":       capbypass.TaskTypeTurnstileProxyLess,
+    "websiteURL": "https://example.com/login",
+    "websiteKey": "0x4AAAAAAAxxxxxxxxxxxxxx",
+}, 120)
+token := solution["token"].(string)
+```
+
+With your own proxy (`TurnstileTask` requires one): a single `http(s)` URL in the `proxy` field, no `socks`:
+
+```go
+solution, err := client.Solve(capbypass.Task{
+    "type":       capbypass.TaskTypeTurnstile,
+    "websiteURL": "https://example.com/login",
+    "websiteKey": "0x4AAAAAAAxxxxxxxxxxxxxx",
+    "action":     "login",
+    "cData":      "session-42",
+    "proxy":      "http://user:pass@host:port",
+}, 120)
+```
+
 ### With Proxy
 
 All task types support proxy configuration:
@@ -220,6 +246,10 @@ TaskTypeReCaptchaV3ProxyLess = "ReCaptchaV3TaskProxyLess"
 // reCAPTCHA v3 Enterprise
 TaskTypeReCaptchaV3Enterprise          = "ReCaptchaV3EnterpriseTask"
 TaskTypeReCaptchaV3EnterpriseProxyLess = "ReCaptchaV3EnterpriseTaskProxyLess"
+
+// Cloudflare Turnstile
+TaskTypeTurnstile          = "TurnstileTask"
+TaskTypeTurnstileProxyLess = "TurnstileTaskProxyLess"
 ```
 
 ## Documentation

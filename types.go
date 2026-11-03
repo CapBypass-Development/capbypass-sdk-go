@@ -29,6 +29,10 @@ const (
 	// CaptchaFox task types
 	TaskTypeCaptchaFox          = "CaptchaFoxTask"
 	TaskTypeCaptchaFoxProxyLess = "CaptchaFoxTaskProxyLess"
+
+	// Cloudflare Turnstile task types
+	TaskTypeTurnstile          = "TurnstileTask"
+	TaskTypeTurnstileProxyLess = "TurnstileTaskProxyLess"
 )
 
 // Task represents a CAPTCHA solving task.
