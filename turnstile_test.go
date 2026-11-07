@@ -92,7 +92,9 @@ func TestCreateTaskTurnstileGatewayErrors(t *testing.T) {
 	}{
 		{"ERROR_INVALID_TASK_DATA", &ErrValidation{}},
 		{"ERROR_TASK_TYPE_INACTIVE", &ErrValidation{}},
+		{"ERROR_PROXY_FORMAT", &ErrValidation{}},
 		{"ERROR_PROXY_BANNED", &ErrValidation{}},
+		{"ERROR_BLOCKED_TARGET", &ErrValidation{}},
 		{"ERROR_PROXY_CONNECTION_FAILED", &ErrValidation{}},
 		{"ERROR_TASK_QUEUE_FULL", &ErrInternal{}},
 	}
